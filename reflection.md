@@ -7,6 +7,7 @@
 - Briefly describe your initial UML design.
 - What classes did you include, and what responsibilities did you assign to each?
 
+There's user, pet, and task. The user can add, remove, and update pets. Pets have add and remove task. Tasks have update task. the user would have perform all actions, but each action is under a different interface. 
 **b. Design changes**
 
 - Did your design change during implementation?
