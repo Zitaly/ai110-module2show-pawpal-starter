@@ -7,12 +7,15 @@
 - Briefly describe your initial UML design.
 - What classes did you include, and what responsibilities did you assign to each?
 
-There's user, pet, and task. The user can add, remove, and update pets. Pets have add and remove task. Tasks have update task. the user would have perform all actions, but each action is under a different interface. 
+There's user, pet, and task. The user can add, remove, and update pets. Pets have add and remove task. Tasks have update task. the user would have perform all actions, but each action is under a different interface.
+
+The design evolved to have Owner, Pet, Task, and Schedule. Owner owned Pet and planned Schedule. It could add and remove pet, see all tasks, and create scheduling. Pet needed a Task. It could add and remove a task and see pending tasks. Schedule ordered Tasks. It could have a list of tasks, see conflicts, and explain the schedule. Task can mark complete, rank priority, and see when a task is due.
 **b. Design changes**
 
 - Did your design change during implementation?
 - If yes, describe at least one change and why you made it.
 
+There were numerous changes that had to be made. This is one. In the initial design, Tasks did not know which pet it belonged to. To fix this, Task was given a field for the pet's name, which will allow the task to be traced back to the pet it's for.
 ---
 
 ## 2. Scheduling Logic and Tradeoffs

@@ -2,13 +2,22 @@ classDiagram
     %% PawPal+ system design draft.
     %% Keep this file updated so it matches your final implementation.
 
+    class Priority {
+        <<enumeration>>
+        LOW
+        MEDIUM
+        HIGH
+    }
+
     class Owner {
         +str name
         +int available_minutes
         +time day_start
-        +list~str~ preferences
+        +bool prefer_high_priority_first
+        +int max_tasks_per_day
         +list~Pet~ pets
-        +list~Schedule~ schedules
+        +dict~date, Schedule~ schedules
+        +day_end() time
         +add_pet(pet: Pet) None
         +remove_pet(pet: Pet) None
         +all_tasks() list~Task~
@@ -23,18 +32,20 @@ classDiagram
         +list~Task~ tasks
         +add_task(task: Task) None
         +remove_task(task: Task) None
-        +pending_tasks() list~Task~
+        +due_tasks(day: date) list~Task~
     }
 
     class Task {
         +str title
         +int duration_minutes
-        +str priority
+        +Priority priority
         +time preferred_time
         +str frequency
-        +bool completed
-        +mark_complete() None
-        +priority_rank() int
+        +date start_date
+        +date last_completed
+        +str pet_name
+        +label() str
+        +mark_complete(day: date) None
         +is_due(day: date) bool
     }
 
@@ -43,7 +54,12 @@ classDiagram
         +Owner owner
         +list~tuple[time, Task]~ planned
         +list~Task~ skipped
+        +dict~str, str~ reasons
         +generate() None
+        -_collect_due_tasks() list~Task~
+        -_sort_tasks(tasks: list~Task~) list~Task~
+        -_place_fixed_tasks(tasks: list~Task~) list~Task~
+        -_fill_flexible_tasks(tasks: list~Task~) None
         +total_minutes() int
         +has_conflicts() bool
         +explain() str
@@ -53,3 +69,4 @@ classDiagram
     Pet "1" *-- "0..*" Task : needs
     Owner "1" --> "0..*" Schedule : plans
     Schedule "1" --> "0..*" Task : orders
+    Task --> Priority : ranked by
