@@ -33,6 +33,7 @@ classDiagram
         +add_task(task: Task) None
         +remove_task(task: Task) None
         +due_tasks(day: date) list~Task~
+        +task_count() int
     }
 
     class Task {
@@ -54,12 +55,16 @@ classDiagram
         +Owner owner
         +list~tuple[time, Task]~ planned
         +list~Task~ skipped
-        +dict~str, str~ reasons
+        +dict~Task, str~ reasons
         +generate() None
         -_collect_due_tasks() list~Task~
         -_sort_tasks(tasks: list~Task~) list~Task~
         -_place_fixed_tasks(tasks: list~Task~) list~Task~
         -_fill_flexible_tasks(tasks: list~Task~) None
+        -_free_gaps() list~list~
+        -_overlaps(start_a: time, task_a: Task, start_b: time, task_b: Task) bool
+        -_plan(start: time, task: Task, reason: str) None
+        -_skip(task: Task, reason: str) None
         +total_minutes() int
         +has_conflicts() bool
         +explain() str
