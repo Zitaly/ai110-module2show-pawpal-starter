@@ -1,5 +1,6 @@
+import pandas as pd
 import streamlit as st
-from pawpal_system import Owner, Pet, Task, fmt
+from pawpal_system import Owner, Pet, Priority, Task, add_minutes, fmt
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
@@ -79,7 +80,11 @@ if st.button("Add pet"):
         st.error(str(e))
 
 if owner.pets:
-    st.table([{"name": p.name, "species": p.species, "age": p.age, "tasks": p.task_count} for p in owner.pets])
+    st.table(
+        pd.DataFrame(
+            {"Pet": p.name, "Species": p.species.capitalize(), "Age": p.age, "Tasks": p.task_count} for p in owner.pets
+        ).set_index("Pet")
+    )
 else:
     st.info("No pets yet. Add one above.")
 
@@ -126,21 +131,42 @@ st.markdown("#### Task list")
 view_day = st.date_input("Day", help="Task status, Done buttons, and the schedule below all use this day.")
 
 
+PRIORITY_BADGES = {Priority.HIGH: "🔴 High", Priority.MEDIUM: "🟡 Medium", Priority.LOW: "🟢 Low"}
+
+
 def task_status(task: Task) -> str:
     """Short status of `task` as of view_day."""
     if task.is_completed(view_day):
-        return "✅ done"
+        return "✅ Done"
     if task.is_overdue(view_day):
-        return f"⚠️ overdue since {task.start_date:%b %d}"
+        return f"⚠️ Overdue since {task.start_date:%b %d}"
     if not task.is_due(view_day):
-        return f"next due {task.start_date:%b %d}"
-    return "⏳ due"
+        return f"🗓️ Next due {task.start_date:%b %d}"
+    return "⏳ Due"
+
+
+def when(task: Task) -> str:
+    """The task's fixed time, or "flexible"."""
+    return fmt(task.preferred_time) if task.preferred_time else "flexible"
+
+
+def complete(task: Task) -> None:
+    """Button callback: complete `task` on view_day and leave a message for the next run."""
+    next_task = task.pet.complete_task(task, view_day)  # also adds the next occurrence
+    st.session_state.flash = f"Marked {task.label} done. Next due {next_task.start_date:%a %b %d}."
+
+
+def remove(task: Task) -> None:
+    """Button callback: remove `task` from its pet and leave a message for the next run."""
+    label = task.label
+    task.pet.remove_task(task)
+    st.session_state.flash = f"Removed {label}."
 
 
 # "flexible" sorts after every HH:MM string, so flexible tasks come last when sorting by time.
 SORT_KEYS = {
+    "Time": when,
     "Pet": lambda t: (t.pet_name, t.title),
-    "Time": lambda t: fmt(t.preferred_time) if t.preferred_time else "flexible",
     "Priority": lambda t: -t.priority,
     "Duration": lambda t: t.duration_minutes,
 }
@@ -163,29 +189,53 @@ else:
         completed=STATUS_FILTERS[status_filter],
         day=view_day,
     )
+    filtered.sort(key=SORT_KEYS[sort_by])
+
     if not filtered:
         st.info("No tasks match these filters.")
-    # Buttons use on_click callbacks so the change is applied before the page redraws.
-    for task in sorted(filtered, key=SORT_KEYS[sort_by]):
-        info, status, done, remove = st.columns([5, 2, 1, 1])
-        when = fmt(task.preferred_time) if task.preferred_time else "flexible"
-        info.markdown(
-            f"**{task.label}** · {task.duration_minutes} min · {task.priority.name.lower()} · {when} · {task.frequency}"
+    else:
+        st.table(
+            pd.DataFrame(
+                {
+                    "Time": when(task),
+                    "Task": task.label,
+                    "Minutes": task.duration_minutes,
+                    "Priority": PRIORITY_BADGES[task.priority],
+                    "Repeats": task.frequency,
+                    "Status": task_status(task),
+                }
+                for task in filtered
+            ).set_index("Time")
         )
-        status.write(task_status(task))
-        done.button(
-            "Done",
-            key=f"done-{id(task)}",
-            disabled=not task.is_due(view_day),
-            on_click=pets_by_name[task.pet_name].complete_task,  # also adds the next occurrence
-            args=(task, view_day),
+
+        overdue = sum(task.is_overdue(view_day) for task in filtered)
+        if overdue:
+            count = "1 task is" if overdue == 1 else f"{overdue} tasks are"
+            st.warning(f"{count} overdue. Overdue tasks win priority ties in the schedule until marked done.")
+        elif not any(task.is_due(view_day) for task in filtered) and any(task.is_completed(view_day) for task in filtered):
+            st.success(f"All caught up for {view_day:%b %d}.")
+
+        # Buttons use on_click callbacks so the change is applied before the page redraws.
+        picked_col, done_col, remove_col = st.columns([4, 1, 1], vertical_alignment="bottom")
+        with picked_col:
+            # Pick by position: Streamlit deep-copies widget values, so selecting the Task itself would return a copy.
+            picked = filtered[
+                st.selectbox(
+                    "Task",
+                    range(len(filtered)),
+                    format_func=lambda i: f"{filtered[i].label} · {when(filtered[i])} · {task_status(filtered[i])}",
+                )
+            ]
+        done_col.button(
+            "Mark done",
+            disabled=not picked.is_due(view_day),
+            on_click=complete,
+            args=(picked,),
         )
-        remove.button(
-            "Remove",
-            key=f"remove-{id(task)}",
-            on_click=pets_by_name[task.pet_name].remove_task,
-            args=(task,),
-        )
+        remove_col.button("Remove", on_click=remove, args=(picked,))
+
+    if "flash" in st.session_state:
+        st.success(st.session_state.pop("flash"))
 
 st.divider()
 
@@ -195,32 +245,44 @@ st.caption(f"For {view_day:%A, %b %d %Y}. Change the day in the task list above.
 if st.button("Generate schedule"):
     schedule = owner.create_schedule(view_day)
 
-    if schedule.planned:
+    planned, skipped = len(schedule.planned), len(schedule.skipped)
+    used = f"{schedule.total_minutes()} of {owner.available_minutes} min used"
+
+    if not planned and not skipped:
+        st.info("No tasks are due on this day.")
+    elif not skipped:
+        st.success(f"All {planned} due task{'s' if planned != 1 else ''} fit in the day ({used}).")
+    else:
+        st.warning(f"Planned {planned} of {planned + skipped} due tasks ({used}). {skipped} didn't fit; see below.")
+
+    if planned:
         st.table(
-            [
+            pd.DataFrame(
                 {
-                    "time": f"{start:%H:%M}",
-                    "task": task.label,
-                    "duration (min)": task.duration_minutes,
-                    "priority": task.priority.name.lower(),
-                    "why": schedule.reasons[task],
+                    "Time": f"{fmt(start)}–{fmt(add_minutes(start, task.duration_minutes))}",
+                    "Task": task.label,
+                    "Minutes": task.duration_minutes,
+                    "Priority": PRIORITY_BADGES[task.priority],
+                    "Why": schedule.reasons[task],
                 }
                 for start, task in schedule.planned
-            ]
+            ).set_index("Time")
         )
-        st.caption(f"{schedule.total_minutes()} of {owner.available_minutes} minutes used.")
-    else:
-        st.info("Nothing scheduled for this day.")
 
-    if schedule.skipped:
+    if skipped:
         st.markdown("**Skipped**")
-        st.table([{"task": t.label, "why": schedule.reasons[t]} for t in schedule.skipped])
+        st.table(
+            pd.DataFrame(
+                {"Task": t.label, "Priority": PRIORITY_BADGES[t.priority], "Why": schedule.reasons[t]}
+                for t in schedule.skipped
+            ).set_index("Task")
+        )
 
     for message in schedule.conflict_messages():
         st.warning(f"Time conflict: {message}")
 
     if schedule.has_conflicts():
-        st.warning("Some fixed-time tasks overlap. Adjust their preferred times.")
+        st.error("Some planned tasks still overlap. Adjust their preferred times.")
 
     with st.expander("Full explanation"):
         st.text(schedule.explain())
