@@ -212,8 +212,11 @@ else:
         if overdue:
             count = "1 task is" if overdue == 1 else f"{overdue} tasks are"
             st.warning(f"{count} overdue. Overdue tasks win priority ties in the schedule until marked done.")
-        elif not any(task.is_due(view_day) for task in filtered) and any(task.is_completed(view_day) for task in filtered):
-            st.success(f"All caught up for {view_day:%b %d}.")
+        else:
+            # Judge "caught up" on every task for the chosen pet(s), not just the rows the status filter shows.
+            pet_tasks = owner.filter_tasks(pet_name=None if pet_filter == "All" else pet_filter, day=view_day)
+            if not any(t.is_due(view_day) for t in pet_tasks) and any(t.is_completed(view_day) for t in pet_tasks):
+                st.success(f"All caught up for {view_day:%b %d}.")
 
         # Buttons use on_click callbacks so the change is applied before the page redraws.
         picked_col, done_col, remove_col = st.columns([4, 1, 1], vertical_alignment="bottom")
