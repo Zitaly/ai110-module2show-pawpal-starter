@@ -18,6 +18,7 @@ classDiagram
         +list~Pet~ pets
         +dict~date, Schedule~ schedules
         +day_end() time
+        +set_window(day_start: time, available_minutes: int) None
         +add_pet(pet: Pet) None
         +remove_pet(pet: Pet) None
         +all_tasks() list~Task~
@@ -45,6 +46,7 @@ classDiagram
         +date start_date
         +date last_completed
         +str pet_name
+        +Pet pet
         +label() str
         +mark_complete(day: date) None
         +is_due(day: date) bool

@@ -56,8 +56,8 @@ with col3:
     )
 
 try:
-    Owner(owner_name, int(available_minutes), day_start)  # reuse Owner's validation before applying changes
-    owner.name, owner.day_start, owner.available_minutes = owner_name, day_start, int(available_minutes)
+    owner.set_window(day_start, int(available_minutes))  # validates before applying either value
+    owner.name = owner_name
 except ValueError as e:
     st.error(f"Owner settings not saved: {e}")
 

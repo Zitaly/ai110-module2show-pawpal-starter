@@ -51,14 +51,17 @@ class Task:
     start_date: date = field(default_factory=date.today)  # the day this occurrence is due
     last_completed: date | None = None  # the day this occurrence was done
     pet_name: str = ""  # set by Pet.add_task
+    pet: Pet | None = field(default=None, init=False, repr=False)  # the pet holding this task; set by Pet.add_task
 
     def __post_init__(self) -> None:
-        """Convert a string priority to Priority and validate duration and frequency."""
-        if isinstance(self.priority, str):  # accepts "low"/"medium"/"high", e.g. from the Streamlit selectbox
-            try:
+        """Convert a string or int priority to Priority and validate duration and frequency."""
+        try:
+            if isinstance(self.priority, str):  # accepts "low"/"medium"/"high", e.g. from the Streamlit selectbox
                 self.priority = Priority[self.priority.upper()]
-            except KeyError:
-                raise ValueError(f"priority must be low, medium, or high, got {self.priority!r}") from None
+            else:  # accepts 1/2/3
+                self.priority = Priority(self.priority)
+        except (KeyError, ValueError):
+            raise ValueError(f"priority must be low, medium, or high, got {self.priority!r}") from None
         if self.duration_minutes <= 0:
             raise ValueError(f"duration_minutes must be positive, got {self.duration_minutes}")
         if self.frequency not in FREQUENCY_DAYS:
@@ -111,7 +114,10 @@ class Pet:
     tasks: list[Task] = field(default_factory=list)
 
     def add_task(self, task: Task) -> None:
-        """Add a care task for this pet and set its pet_name."""
+        """Add a care task for this pet, moving it from its previous pet if it had one."""
+        if task.pet is not None and task.pet is not self:
+            task.pet.remove_task(task)
+        task.pet = self
         task.pet_name = self.name
         if task not in self.tasks:
             self.tasks.append(task)
@@ -119,6 +125,7 @@ class Pet:
     def remove_task(self, task: Task) -> None:
         """Remove this exact task object from the pet. Raises ValueError if it isn't there."""
         self.tasks.remove(task)
+        task.pet = None
 
     def complete_task(self, task: Task, day: date) -> Task:
         """Mark `task` done on `day`, add its next occurrence as a new task, and return that new task."""
@@ -153,12 +160,28 @@ class Owner:
     pets: list[Pet] = field(default_factory=list)
     schedules: dict[date, Schedule] = field(default_factory=dict)
 
-    def __post_init__(self) -> None:
-        """Validate that the available time is non-negative and ends before midnight."""
-        if self.available_minutes < 0:
-            raise ValueError(f"available_minutes can't be negative, got {self.available_minutes}")
-        if minutes_between(time(0, 0), self.day_start) + self.available_minutes >= MINUTES_PER_DAY:
-            raise ValueError("available time must end before midnight")
+    def __setattr__(self, name: str, value) -> None:
+        """Validate the available window whenever day_start or available_minutes is set, including in __init__."""
+        if name in ("day_start", "available_minutes"):
+            window = {"day_start": getattr(self, "day_start", None), "available_minutes": getattr(self, "available_minutes", None)}
+            window[name] = value
+            self._check_window(**window)
+        super().__setattr__(name, value)
+
+    @staticmethod
+    def _check_window(day_start: time | None, available_minutes: int | None) -> None:
+        """Raise ValueError if the available time is negative or doesn't end before midnight. None skips a check."""
+        if available_minutes is not None and available_minutes < 0:
+            raise ValueError(f"available_minutes can't be negative, got {available_minutes}")
+        if day_start is not None and available_minutes is not None:
+            if minutes_between(time(0, 0), day_start) + available_minutes >= MINUTES_PER_DAY:
+                raise ValueError("available time must end before midnight")
+
+    def set_window(self, day_start: time, available_minutes: int) -> None:
+        """Change both window settings at once, so a valid new pair isn't rejected halfway through."""
+        self._check_window(day_start, available_minutes)
+        super().__setattr__("day_start", day_start)
+        super().__setattr__("available_minutes", available_minutes)
 
     @property
     def day_end(self) -> time:

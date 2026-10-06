@@ -56,17 +56,20 @@ Total: 80 of 180 min used.
 
 ```bash
 # Run the full test suite:
-pytest
+python -m pytest
 
 # Run with coverage:
 pytest --cov
 ```
+The 52 tests of tthe suite cover a wide range of the app's functions.
 
 Sample test output:
 
 ```
-# Paste your pytest output here
+52 passed in 0.22s
 ```
+
+While 52 tests were passed, since this is AI-generated code, I'd give it a confidence rating of 3.
 
 ## 📐 Smarter Scheduling
 
