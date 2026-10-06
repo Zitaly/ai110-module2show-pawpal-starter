@@ -25,11 +25,14 @@ There were numerous changes that had to be made. This is one. In the initial des
 - What constraints does your scheduler consider (for example: time, priority, preferences)?
 - How did you decide which constraints mattered most?
 
+The scheduler prioritizes readability and ease of debugging.
+
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
 - Why is that tradeoff reasonable for this scenario?
 
+With the prioritization of readability and debugging, the scheduler can't create the best possible plan. This is fine, as certain pets and actions may have set schedules that can't be optimized. This can be left to the owner's disgression.
 ---
 
 ## 3. AI Collaboration

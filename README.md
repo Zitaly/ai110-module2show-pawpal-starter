@@ -74,10 +74,10 @@ Sample test output:
 
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | sort_by_time(self) | by time. |
+| Filtering | filter_tasks| by pet name, completion, or time. |
+| Conflict handling | has_conflicts(self) and _relocate(self, task: Task) | Checks if there's a conflict and relocates a task respectively. |
+| Recurring tasks | complete_task(self, task: Task, day: date) | Marks task as complete and sets up a new task for its next occurrence.|
 
 ## 📸 Demo Walkthrough
 
